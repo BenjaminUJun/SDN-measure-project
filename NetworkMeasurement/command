@@ -1,0 +1,22 @@
+install ovs:
+apt-get remove openvswitch-common openvswitch-datapath-dkms openvswitch-controller openvswitch-pki openvswitch-switch
+fakeroot debian/rules binary
+cd ..
+dpkg -i openvswitch-common*.deb openvswitch-datapath-dkms*.deb openvswitch-controller*.deb openvswitch-pki*.deb openvswitch-switch*.deb
+/etc/init.d/openvswitch-controller stop
+update-rc.d openvswitch-controller disable
+/etc/init.d/openvswitch-switch start
+
+
+add sampling flow:
+sudo mn --controller=remote --custom ~/myscript/test_topology.py --topo mytopo --switch ovs,protocols=OpenFlow13
+sh ovs-ofctl -O OpenFlow13 add-flow s1 "in_port=1,actions=output_sampling(3,0,5),output:2"
+sh ovs-ofctl -O OpenFlow13 add-flow s1 "in_port=2,actions=output:1"
+
+get sampling flow from ryu REST api:
+PYTHONPATH=. ./bin/ryu-manager --verbose --observe-links ryu/app/rest_topology.py ryu/app/ofctl_rest.py ryu/app/simple_switch_13.py
+
+curl -X POST -d '{"dpid":"0000000000000001", "priority":"32765","actions":[{"type":"OUTPUT","port":1}],"match":{"in_port":2}}' http://127.0.0.1:8080/stats/flowentry/add
+curl -X POST -d '{"dpid":"0000000000000001", "priority":"32765","actions":[{"type":"OUTPUT","port":2},{"type":"OUTPUT_SAMPLING","port":3,"p":0,"m":5}],"match":{"in_port":1}}' http://127.0.0.1:8080/stats/flowentry/add
+
+http://127.0.0.1:8080/stats/flow/0000000000000001
